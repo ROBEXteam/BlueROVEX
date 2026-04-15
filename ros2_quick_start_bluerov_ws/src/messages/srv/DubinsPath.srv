@@ -1,0 +1,8 @@
+# Request
+Pose2DEulerAngles start_pose
+Pose2DEulerAngles end_pose
+float64 turning_radius
+---
+# Response
+PathFollowing2DPoint[] data
+

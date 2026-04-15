@@ -1,0 +1,9 @@
+            
+Attribution des commandes pour RC override :
+
+# self.commands[0] -> pitch (inclinaison vers l'avant du rov)
+# self.commands[1] -> roll (rotation sur axe x, penche sur cote)
+# self.commands[2] -> elevation
+# self.commands[3] -> yaw (rotation sur axe z)
+# self.commands[4] -> avant/arriere
+# self.commands[5] -> lateral gauche/droite

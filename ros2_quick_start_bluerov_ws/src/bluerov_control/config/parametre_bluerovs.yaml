@@ -1,0 +1,116 @@
+
+
+/**:
+  ros__parameters:  # pour définir des variables pour tout le monde
+    display_length_video: 900.0
+    sysid_mygcs: 255
+    ip_gcs: "192.168.2.1"
+
+
+
+
+
+# ---------- Castor ----------
+castor:
+  control_castor: 
+    ros__parameters:
+      ip_rov: "192.168.2.21"
+      camera_port: 5621
+      rov_id: 1 # laisser à un, c'est juste par défaut, mais il sera écrasé s'ils sont plusieurs par le launch file
+
+
+  mavlink_castor: 
+    ros__parameters:
+      mavlink_port: 14571
+      sysid_rov: 21
+      ip_rov: "192.168.2.21"
+
+  camera_castor:
+    ros__parameters:
+      port: 5621
+      topic_raw: "/castor/image"
+      topic_compressed: "/castor/image/compressed"
+      publish_raw: True
+      publish_compressed: True
+
+  
+
+# ---------- Pollux ----------
+pollux:
+  control_pollux: 
+    ros__parameters:
+      ip_rov: "192.168.2.22"
+      camera_port: 5622
+      rov_id: 1 # laisser à un, c'est juste par défaut, mais il sera écrasé s'ils sont plusieurs par le launch file
+  
+  mavlink_pollux: 
+    ros__parameters:
+      mavlink_port: 14572
+      sysid_rov: 22
+      ip_rov: "192.168.2.22"
+
+  camera_pollux:
+    ros__parameters:
+      port: 5622
+      topic_raw: "/pollux/image"
+      topic_compressed: "/pollux/image/compressed"
+      publish_raw: True
+      publish_compressed: True
+
+
+
+# ---------- Inky ----------
+inky:
+  control_inky: 
+    ros__parameters:
+      ip_rov: "192.168.2.2"
+      camera_port: 5600
+      rov_id: 1 # laisser à un, c'est juste par défaut, mais il sera écrasé s'ils sont plusieurs par le launch file
+
+  mavlink_inky: 
+    ros__parameters:
+      mavlink_port: 14550
+      sysid_rov: 1
+
+  camera_inky:
+    ros__parameters:
+      port: 5600
+      topic_raw: "/inky/image"
+      topic_compressed: "/inky/image/compressed"
+      publish_raw: True
+      publish_compressed: True
+
+      
+      
+      
+# ---------- Pinky ----------
+pinky:
+  control_pinky: # Fait référence au nom du node executé
+    ros__parameters: # Attention, il y a deux "_"
+      ROV_name: 'pinky'
+      #ID: 2.0
+      param: "parameters_pinky"
+      nb_cam: 2.0
+      nb_target_cam: 1.1
+      ip_rov: "192.168.3"
+      num_beacon: 2.0
+      camera_port: 5602
+
+
+
+# ---------- Blinky ----------
+blinky:
+  control_blinky: # Fait référence au nom du node executé
+    ros__parameters: # Attention, il y a deux "_"
+      ROV_name: 'blinky'
+      #ID: 3.0
+      param: "parameters_blinky"
+      nb_cam: 1.0
+      nb_target_cam: 1.0
+      ip_rov: "192.168.4"
+      camera_port: 5603
+
+
+
+
+
