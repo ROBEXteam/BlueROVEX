@@ -27,6 +27,8 @@ setup(
     entry_points={
         'console_scripts': [
             'control_node = bluerov_control.control:main',
+            'control_pursuer_node = bluerov_control.control_pursuer:main',
+            'control_target_node = bluerov_control.control_target:main',
             'mavlink_node = bluerov_control.mavlink:main',
             'camera_node = bluerov_control.camera:main',
             'rov_selector_node = bluerov_control.rov_selector:main',

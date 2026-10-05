@@ -37,6 +37,7 @@ rosidl_generate_interfaces(${PROJECT_NAME}
   "msg/State.msg"
   "msg/VfrHud.msg"
   "srv/CommandBool.srv"
+  "srv/Wset.srv"
   
 
   DEPENDENCIES geometry_msgs std_msgs rcl_interfaces sensor_msgs

@@ -1,0 +1,2 @@
+cd ~/Documents/GIT/sbgECom/build$ 
+socat -d -d TCP-LISTEN:22220,reuseaddr,fork PTY,link=/tmp/sbg_serial,raw,echo=0

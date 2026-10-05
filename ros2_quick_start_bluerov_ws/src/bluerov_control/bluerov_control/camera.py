@@ -38,7 +38,6 @@ class Camera(Node):
         #------------------- Publishers -------------------#
         if self.publish_compressed:
             self.publisher_compressed = self.create_publisher(CompressedImage, self.topic_compressed, 10)
-
         if self.publish_raw:
             self.publisher_raw = self.create_publisher(Image, self.topic_raw, 10)
 
@@ -48,6 +47,7 @@ class Camera(Node):
         self.bridge = CvBridge()
 
     def timer_callback(self):
+
         if self.video._frame is None: return
 
         frame = self.video._frame
@@ -57,6 +57,8 @@ class Camera(Node):
             self.publisher_compressed.publish(msg_compressed)
 
         if self.publish_raw:
+            self.get_logger().info(f"self.publish_raw:{self.publish_raw}")
+
             msg = self.bridge.cv2_to_imgmsg(frame, "bgr8")
             self.publisher_raw.publish(msg)
 

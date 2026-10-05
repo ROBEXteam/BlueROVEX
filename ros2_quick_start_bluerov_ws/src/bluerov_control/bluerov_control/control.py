@@ -30,7 +30,9 @@ from messages.srv import CommandBool
 
 from sensor_msgs.msg import Imu, Joy
 from std_msgs.msg import Float64, String, Bool, Float32MultiArray, Int32
-
+from geometry_msgs.msg import Twist, Pose
+from std_srvs.srv import Trigger
+from messages.srv import Wset
 def sawtooth(x):
     return np.arctan2(np.sin(x), np.cos(x))
 
@@ -91,7 +93,7 @@ class Control(Node):
         self.enregistrement_pub = self.create_publisher(Bool,              self.ns+'/enregistrement_en_cours',  self.queue_listener)
         self.command_pub        = self.create_publisher(OverrideRCIn,      self.ns+'/sensors/rc/override',      self.queue_listener)
         self.program_B_name_pub = self.create_publisher(String,            self.ns+"/program_B_name",           self.queue_listener) 
-        
+        self.is_autonomous_pub  = self.create_publisher(Int32,             self.ns+"/is_autonomous",            self.queue_listener) 
         
 
         #####################
@@ -111,27 +113,46 @@ class Control(Node):
         self.dt = 1/10  # mettre le temps du systeme
         self.theta_target_rad = 0.0 # pitch desire par defaut, a l'horizontal. On peut choisir une autre valeur a piloter
         self.phi_target_rad = 0.0 # roll desire par defaut, a l'horizontal. On peut choisir une autre valeur a piloter
-        self.depth_target = 1.0 # a choisir. Ici en deg vu que le cap (self.heading) est mesure en deg
-        self.heading_target_deg = 0.0 # a choisir. Ici en deg vu que le cap (self.heading) est mesure en deg
+        self.depth_target = 3.5 # a choisir. Ici en deg vu que le cap (self.heading) est mesure en deg
+        self.heading_target_deg = 270 # a choisir. Ici en deg vu que le cap (self.heading) est mesure en deg (N = 0, E = 90, S = 180, W = -90 ou 270, coin NW = -31, 160)
+        self.speed = 1650
+        self.heading2North = 0#20
 
+        self.x_target = 0.0
+        self.y_target = 0.0
+        self.estimated_x, self.estimated_y, self.estimated_z = 0.0, 0.0, 0.0 # position estimee
+        self.err_guidance = Twist() # erreur de guidage, pour le guidance_node
 
+        # Client de service
+        self.client = self.create_client(Wset, self.ns+'/wset_compute')
+
+        # Attendre que le service existe
+        while not self.client.wait_for_service(timeout_sec=1.0):
+            self.get_logger().info('service non disponible...')
+        
     def listener(self):
         self.compass_sub      = self.create_subscription(Float64, self.ns+'/sensors/global_position/compass_hdg', self.callback_heading, self.qos_profile)
         self.depth_sub        = self.create_subscription(Float64, self.ns+'/sensors/global_position/rel_alt',     self.callback_depth,   self.qos_profile)
         self.subscription     = self.create_subscription(Imu,     self.ns+"/sensors/imu/data",                    self.callback_imu,     self.qos_profile)
-        self.joy_sub          = self.create_subscription(Joy,     '/joy',                                         self.callback_joy,     self.queue_listener)
-        self.rov_selector_sub = self.create_subscription(Int32,     '/current_rov_id',                                         self.rov_id_callback,     self.queue_listener)
+        self.joy_sub          = self.create_subscription(Joy,     '/joy',                                         self.callback_joy,     self.queue_listener) #/!\ pas de namespace
+        self.rov_selector_sub = self.create_subscription(Int32,   '/current_rov_id',                              self.rov_id_callback,  self.queue_listener) #/!\ pas de namespace
+        self.guidance_sub     = self.create_subscription(Twist,   self.ns+'/guidance',                            self.callback_guidance, 10)
+        self.pursuer_pose_sub = self.create_subscription(Pose,    self.ns+'/pursuer_pose',                        self.callback_pursuer_pose, 10)
+        self.target_pose_sub  = self.create_subscription(Pose,    self.ns+'/target_pose',                         self.callback_target_pose, 10)
+
 
         # prevents unused variable warning 
         self.compass_sub 
         self.depth_sub 
         self.joy_sub 
         self.rov_selector_sub
+        self.guidance_sub
         self.subscription 
+        self.pursuer_pose_sub
+        self.target_pose_sub
 
     def button(self, letter):
         return self.buttons[self.letter2index[letter]]
-
 
     def send_commands(self):
 
@@ -154,8 +175,16 @@ class Control(Node):
         msg = Bool(data = self.start_record)
         self.enregistrement_pub.publish(msg)
 
+    def callback_guidance(self, msg):
+        self.err_guidance = msg
     def callback_heading(self, msg):
-        self.heading = msg.data
+        self.heading = msg.data+self.heading2North
+
+    def callback_pursuer_pose(self, msg):
+        self.pursuer_pose = msg
+    
+    def callback_target_pose(self, msg):
+        self.target_pose = msg
 
     def callback_heading_reference(self, data):
         self.heading_reference = data.data
@@ -172,7 +201,8 @@ class Control(Node):
         orientq=(W, X, Y, Z)
         ### Conversion quaternions in rotation matrix
         self.phi_rad, self.theta_rad, self.psy_rad = Rotation.from_quat([orientq[1], orientq[2], orientq[3],   orientq[0]]).as_euler("xyz") # Roulis, Tangage, Lacet 
-        
+    
+
     def rov_id_callback(self, msg):
         self.active = (msg.data == self.rov_id)
         
@@ -198,11 +228,9 @@ class Control(Node):
         if self.buttons[0] == 1 and self.old_buttons[0] == 0:  # A button
             self.isAutonomous = not self.isAutonomous
             self.get_logger().info(f"Mode autonome {'activé' if self.isAutonomous else 'désactivé'}")
-            
-        
-        
 
-        
+        if self.buttons[3] == 1 and self.old_buttons[3] == 0:  # Y button
+            self.send_request_Wset(self.pursuer_pose, self.target_pose)
 
     def callback_depth(self, msg):
         self.depth = -msg.data
@@ -215,15 +243,31 @@ class Control(Node):
         req.value = bool(arming)
         self.client_arm.call_async(req)
 
+    def send_request_Wset(self, pose_pursuer, pose_target):
+
+        req = Wset.Request()
+
+        req.pose_pursuer = pose_pursuer
+        req.pose_target = pose_target
+
+        future = self.client.call_async(req)
+
+        rclpy.spin_until_future_complete(self, future)
+
+        return future.result().pose_result
 
     def run(self):
         self.commands = [65535] * self.nb_channels
-        
+        self.is_autonomous_pub.publish(Int32(data=int(self.isAutonomous)))
         if self.isAutonomous:
             kpi_p, kpi_d = 250, 60
             kro_p, kro_d = 250, 60
             kd_p, kd_d, kd_i = 250.0, 200, 80
             Kp, Kv, Ki = 250, 100, 40 #heading
+            kx1, kx2 = 200, 1.0
+            ky1, ky2 = 200, 1.0
+            kz1, kz2 = 200, 1.0
+            
             #### stabilisation en roll
             e = sawtooth(self.theta_rad - self.theta_target_rad)   # note : self.Theta_rad en rad de base,  self.Theta_target_rad en rad
             e_d = self.angular_velocity_y
@@ -241,8 +285,9 @@ class Control(Node):
             u1 = np.sign(u1)*min([500, abs(u1)]) 
             self.commands[1] = int(u1 + 1500)
             
+            
 
-
+            """
             #### Commande en profondeur --> marche
             e_old = self.depth - self.depth_target
             e = self.depth - self.depth_target
@@ -253,21 +298,15 @@ class Control(Node):
             
             u2 = (kd_p*e + kd_d*e_d)# + kd_i*self.dt*e_i )
             self.commands[2] = int( u2*np.cos(self.phi_rad) )  + 1500
-
+            """
                             
-            ### Commande heading
-            e = sawtooth((self.heading_target_deg - self.heading) * np.pi / 180)
-            
-            e_d = -self.angular_velocity_z 
-            #e_i = e + self.ei_h 
-            #if abs(e) < 0.5: self.ei_h = e_i # pour eviter une trop grosse integration
-            
-            u3 = (Kp*e + Kv*e_d)# + Ki*self.dt*e_i)  
-            u3 = np.sign(u3)*min([500, abs(u3)]) 
-            self.commands[3] = int(u3 + 1500)
+            ### Commande position
+            self.commands[4] = int(1500 + kx1*np.tanh(kx2*self.err_guidance.linear.x))
+            self.commands[5] = int(1500 + ky1*np.tanh(ky2*self.err_guidance.linear.y))
+            self.commands[2] = int(1500 + kz1*np.tanh(kz2*self.err_guidance.linear.z))
 
 
-            self.commands[4] = 1550
+            #self.commands[4] = self.speed
 
 
         else:
